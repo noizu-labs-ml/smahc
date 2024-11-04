@@ -1,0 +1,86 @@
+networks:
+  smahca-network:
+services:
+  redis:
+    container_name: smahca-redis
+    hostname: smahca-redis
+    image: "redis:alpine"
+    ports:
+      - 127.0.0.1:16379:6379
+    networks:
+      - smahca-network
+  database:
+    container_name: smahca-database
+    hostname: smahca-database
+    image: "timescale/timescaledb-ha:pg16.4-ts2.17.1-all"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=smahca
+    ports:
+      - 127.0.0.1:15432:5432
+    volumes:
+      - smahca_ts_data:/pg/data
+    networks:
+      - smahca-network
+  weaviate:
+    container_name: smahca-weaviate
+    hostname: smahca-weaviate
+    command:
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8080'
+    - --scheme
+    - http
+    image: cr.weaviate.io/semitechnologies/weaviate:1.27.0
+    ports:
+    - 18080:8080
+    - 10051:50051
+    networks:
+      - smahca-network
+    volumes:
+    - smahca_weaviate_data:/var/lib/weaviate
+    restart: on-failure:0
+    environment:
+      IMAGE_INFERENCE_API: 'http://smahca-i2v-neural:8080'
+      NER_INFERENCE_API: 'http://smahca-ner-transformers:8080'
+      SUM_INFERENCE_API: 'http://smahca-sum-transformers:8080'
+      OPENAI_APIKEY: $OPENAI_APIKEY
+      MISTRAL_APIKEY: $MISTRAL_APIKEY
+      ANTHROPIC_APIKEY: $ANTHROPIC_APIKEY
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-openai'
+      ENABLE_MODULES: 'text2vec-openai,ner-transformers,sum-transformers,img2vec-neural,ref2vec-centroid,generative-openai,generative-mistral,generative-anthropic'
+      CLUSTER_HOSTNAME: 'node1'
+    networks:
+      - smahca-network      
+  ner-transformers:
+    container_name: smahca-ner-transformers
+    hostname: smahca-ner-transformers
+    image: cr.weaviate.io/semitechnologies/ner-transformers:dbmdz-bert-large-cased-finetuned-conll03-english
+    environment:
+      ENABLE_CUDA: '1'
+    networks:
+      - smahca-network      
+  sum-transformers:
+    container_name: smahca-sum-transformers
+    hostname: smahca-sum-transformers
+    image: cr.weaviate.io/semitechnologies/sum-transformers:facebook-bart-large-cnn-1.0.0
+    environment:
+      ENABLE_CUDA: '1'
+    networks:
+      - smahca-network      
+  i2v-neural:
+    container_name: smahca-i2v-neural
+    hostname: smahca-i2v-neural
+    image: cr.weaviate.io/semitechnologies/img2vec-pytorch:resnet50
+    environment:
+      ENABLE_CUDA: '1'
+    networks:
+      - smahca-network      
+volumes:
+  smahca_weaviate_data
+  smahca_ts_data
